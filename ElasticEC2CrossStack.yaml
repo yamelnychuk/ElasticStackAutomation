@@ -1,0 +1,253 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: EC2 layer for Elastic Stack Demo
+Parameters:
+  NetworkStackName:
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack.
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: ^[a-zA-Z][-a-zA-Z0-9]*$
+    Default: elastic-network-stack
+  InstanceTypeParameter:
+    Description: Enter instance type. Default is t2.micro
+    Type: String
+    Default: t2.micro
+  ImageID:
+    Description: An Amazon EC2 image ID, can be found in EC2 service page
+    Type: "AWS::EC2::Image::Id"
+  KeyName:
+    Description: Name of EC2 KeyPair to enable SSH access to the instance
+    Type: "AWS::EC2::KeyPair::KeyName"
+    ConstraintDescription: must be the name of an existing EC2 KeyPair
+  HostedZoneID:
+    Description: public DNS hosted zone for Kibana usage
+    Type: "AWS::Route53::HostedZone::Id"
+  HostedZoneDomainName:
+    Description: public DNS hosted zone for Kibana usage
+    Type: String
+    Default: "support-coe.com"
+Resources:
+  ElasticSearchNode1:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !Ref ImageID
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - GroupSet: 
+            - Fn::ImportValue:
+                !Sub "${NetworkStackName}-PrivateNodeSG"
+          SubnetId: 
+            Fn::ImportValue:
+              !Sub "${NetworkStackName}-PrivateSubnet1ID"
+          DeleteOnTermination: "true"
+          DeviceIndex: "0"
+  ElasticSearchNode2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !Ref ImageID
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - GroupSet: 
+            - Fn::ImportValue:
+                !Sub "${NetworkStackName}-PrivateNodeSG"
+          SubnetId: 
+            Fn::ImportValue:
+              !Sub "${NetworkStackName}-PrivateSubnet1ID"
+          DeleteOnTermination: "true"
+          DeviceIndex: "0"
+  ElasticSearchNode3:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !Ref ImageID
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - GroupSet: 
+            - Fn::ImportValue:
+                !Sub "${NetworkStackName}-PrivateNodeSG"
+          SubnetId: 
+            Fn::ImportValue:
+              !Sub "${NetworkStackName}-PrivateSubnet2ID"
+          DeleteOnTermination: "true"
+          DeviceIndex: "0"
+  LogstashNode1:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !Ref ImageID
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - GroupSet: 
+            - Fn::ImportValue:
+                !Sub "${NetworkStackName}-PrivateNodeSG"
+          SubnetId: 
+            Fn::ImportValue:
+              !Sub "${NetworkStackName}-PrivateSubnet1ID"
+          DeleteOnTermination: "true"
+          DeviceIndex: "0"
+  LogstashNode2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !Ref ImageID
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - GroupSet: 
+            - Fn::ImportValue:
+                !Sub "${NetworkStackName}-PrivateNodeSG"
+          SubnetId: 
+            Fn::ImportValue:
+              !Sub "${NetworkStackName}-PrivateSubnet2ID"
+          DeleteOnTermination: "true"
+          DeviceIndex: "0"
+  KibanaNode:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !Ref ImageID
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - GroupSet: 
+            - Fn::ImportValue:
+                !Sub "${NetworkStackName}-PublicNodeSG"
+          SubnetId: 
+            Fn::ImportValue:
+              !Sub "${NetworkStackName}-PublicSubnet1ID"
+          DeleteOnTermination: "true"
+          AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+  WebServerNode:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !Ref ImageID
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - GroupSet: 
+            - Fn::ImportValue:
+                !Sub "${NetworkStackName}-PublicNodeSG"
+          SubnetId: 
+            Fn::ImportValue:
+              !Sub "${NetworkStackName}-PublicSubnet1ID"
+          DeleteOnTermination: "true"
+          DeviceIndex: "0"
+  BastionNode:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !Ref ImageID
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - GroupSet: 
+            - Fn::ImportValue:
+                !Sub "${NetworkStackName}-PublicNodeSG"
+          SubnetId: 
+            Fn::ImportValue:
+              !Sub "${NetworkStackName}-PublicSubnet1ID"
+          DeleteOnTermination: "true"
+          AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+      UserData:
+        Fn::Base64:
+          !Join
+            - ''
+            - - "#!/bin/bash -xe\n"
+              - "yum update -y aws-cfn-bootstrap\n"
+              - "# Install the files and packages from the metadata\n"
+              - "/opt/aws/bin/cfn-init -v "
+              - " --stack "
+              - !Ref 'AWS::StackName'
+              - " --resource Bastion "
+              - " --configsets All "
+              - " --region "
+              - !Ref 'AWS::Region'
+              - "\n"
+              - "# Signal the status from cfn-init\n"
+              - "/opt/aws/bin/cfn-signal -e $? "
+              - " --stack "
+              - !Ref 'AWS::StackName'
+              - " --resource Bastion "
+              - " --region "
+              - !Ref 'AWS::Region'
+              - "\n"
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: "PT4M"
+  LocalHZRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-LocalHostedZoneID"
+      RecordSets:
+        - Name: !Join ['', [ 'elasticsearchnode1', ., 'elasticstack.com', .]]
+          Type: A
+          TTL: '900'
+          ResourceRecords:
+            - !GetAtt ElasticSearchNode1.PrivateIp
+        - Name: !Join ['', [ 'elasticsearchnode2', ., 'elasticstack.com', .]]
+          Type: A
+          TTL: '900'
+          ResourceRecords:
+            - !GetAtt ElasticSearchNode2.PrivateIp
+        - Name: !Join ['', [ 'elasticsearchnode3', ., 'elasticstack.com', .]]
+          Type: A
+          TTL: '900'
+          ResourceRecords:
+            - !GetAtt ElasticSearchNode3.PrivateIp
+        - Name: !Join ['', [ 'logstashnode1', ., 'elasticstack.com', .]]
+          Type: A
+          TTL: '900'
+          ResourceRecords:
+            - !GetAtt LogstashNode1.PrivateIp
+        - Name: !Join ['', [ 'logstashnode2', ., 'elasticstack.com', .]]
+          Type: A
+          TTL: '900'
+          ResourceRecords:
+            - !GetAtt LogstashNode2.PrivateIp
+        - Name: !Join ['', [ 'kibananode', ., 'elasticstack.com', .]]
+          Type: A
+          TTL: '900'
+          ResourceRecords:
+            - !GetAtt KibanaNode.PrivateIp
+        - Name: !Join ['', [ 'webservernode', ., 'elasticstack.com', .]]
+          Type: A
+          TTL: '900'
+          ResourceRecords:
+            - !GetAtt WebServerNode.PrivateIp
+        - Name: !Join ['', [ 'bastionode', ., 'elasticstack.com', .]]
+          Type: A
+          TTL: '900'
+          ResourceRecords:
+            - !GetAtt BastionNode.PrivateIp
+  PublicHZRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneID
+      Name: !Join ['', [ 'elk', ., !Ref HostedZoneDomainName, .]]
+      Type: A
+      TTL: '900'
+      ResourceRecords:
+      - !GetAtt KibanaNode.PublicIp
+Outputs:
+  URL:
+    Description: "URL of the kibana"
+    Value: !Join ['', [ 'http://', elk', ., !Ref HostedZoneDomainName, .]]
+  ElasticSearchNode1PrivateIp:
+    Value: !GetAtt ElasticSearchNode1.PrivateIp
+  ElasticSearchNode2PrivateIp:
+    Value: !GetAtt ElasticSearchNode2.PrivateIp
+  ElasticSearchNode3PrivateIp:
+    Value: !GetAtt ElasticSearchNode3.PrivateIp
+  LogstashNode1PrivateIp:
+    Value: !GetAtt LogstashNode1.PrivateIp
+  LogstashNode2PrivateIp:
+    Value: !GetAtt LogstashNode2.PrivateIp
+  KibanaNodePrivateIp:
+    Value: !GetAtt KibanaNode.PrivateIp
+  WebServerNodePrivateIp:
+    Value: !GetAtt WebServerNode.PrivateIp
+  BastionNodePublicIp:
+    Value: !GetAtt BastionNode.PublicIp

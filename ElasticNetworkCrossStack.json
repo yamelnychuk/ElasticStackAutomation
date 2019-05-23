@@ -1,0 +1,634 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Networking layer for Elastic Stack Demo",
+    "Mappings": {
+        "NetworkConfig" : {
+            "VPC" : { "CIDR" : "10.30.0.0/16"},
+            "Public1" : { "CIDR" : "10.30.31.0/24"},
+            "Public2" : { "CIDR" : "10.30.32.0/24"},
+            "Private1" : { "CIDR" : "10.30.33.0/24"},
+            "Private2" : { "CIDR" : "10.30.34.0/24"}
+        }
+    },
+    "Resources": {
+        "VPC" : {
+            "Type" : "AWS::EC2::VPC",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "VPC", "CIDR"] },
+                "EnableDnsHostnames" : "true",
+                "EnableDnsSupport" : "true",
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "InternetGateway" : {
+            "Type" : "AWS::EC2::InternetGateway",
+            "Properties" : {
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            },
+            "DependsOn" : "VPC"
+        },
+        "InternetGatewayAttachment" : {
+            "Type" : "AWS::EC2::VPCGatewayAttachment",
+            "Properties" : {
+                "VpcId" : { "Ref" : "VPC"},
+                "InternetGatewayId" : { "Ref" : "InternetGateway"}
+            }
+        },
+        "EIP" : {
+            "Type" : "AWS::EC2::EIP",
+            "Properties" : {
+                "Domain" : "vpc"
+            },
+            "DependsOn" : "InternetGatewayAttachment"
+        },
+        "NATGW" : {
+            "Type" : "AWS::EC2::NatGateway",
+            "Properties" : {
+                "AllocationId" : { "Fn::GetAtt" : ["EIP", "AllocationId"]},
+                "SubnetId" : { "Ref" : "PublicSubnet1"},
+                "Tags" : [ {"Key" : "Owner", "Value" : "yamelnychuk" } ]
+            }
+        },
+        "PublicSubnet1" : {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Public1", "CIDR"] },
+                "AvailabilityZone" : { "Fn::Select" : [ "0", { "Fn::GetAZs" : { "Ref" : "AWS::Region"} } ] },
+                "VpcId" : { "Ref" : "VPC" },
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "PublicSubnet2" : {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Public2", "CIDR"] },
+                "AvailabilityZone" : { "Fn::Select" : [ "1", { "Fn::GetAZs" : { "Ref" : "AWS::Region"} } ] },
+                "VpcId" : { "Ref" : "VPC" },
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "PrivateSubnet1" : {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Private1", "CIDR"] },
+                "AvailabilityZone" : { "Fn::Select" : [ "0", { "Fn::GetAZs" : { "Ref" : "AWS::Region"} } ] },
+                "VpcId" : { "Ref" : "VPC" },
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "PrivateSubnet2" : {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Private2", "CIDR"] },
+                "AvailabilityZone" : { "Fn::Select" : [ "1", { "Fn::GetAZs" : { "Ref" : "AWS::Region"} } ] },
+                "VpcId" : { "Ref" : "VPC" },
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "PublicRouteTable" : {
+            "Type" : "AWS::EC2::RouteTable",
+            "Properties" : {
+                "VpcId" : { "Ref" : "VPC"},
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "PublicRoute" : {
+            "Type" : "AWS::EC2::Route",
+            "Properties" : {
+                "DestinationCidrBlock" : "0.0.0.0/0",
+                "GatewayId" : { "Ref" : "InternetGateway"},
+                "RouteTableId" : { "Ref" : "PublicRouteTable"}
+            },
+            "DependsOn" : ["InternetGateway", "InternetGatewayAttachment"]
+        },
+        "PublicRouteTableAssociationAZ1" : {
+            "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties" : {
+                "RouteTableId" : { "Ref" : "PublicRouteTable"},
+                "SubnetId" : { "Ref" : "PublicSubnet1"}
+            }
+        },
+        "PublicRouteTableAssociationAZ2" : {
+            "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties" : {
+                "RouteTableId" : { "Ref" : "PublicRouteTable"},
+                "SubnetId" : { "Ref" : "PublicSubnet2"}
+            }
+        },
+        "PrivateRouteTable" : {
+            "Type" : "AWS::EC2::RouteTable",
+            "Properties" : {
+                "VpcId" : { "Ref" : "VPC"},
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "PrivateRoute" : {
+            "Type" : "AWS::EC2::Route",
+            "Properties" : {
+                "DestinationCidrBlock" : "0.0.0.0/0",
+                "NatGatewayId" : { "Ref" : "NATGW"},
+                "RouteTableId" : { "Ref" : "PrivateRouteTable"}
+            }
+        },
+        "PrivateRouteTableAssociationAZ1" : {
+            "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties" : {
+                "RouteTableId" : { "Ref" : "PrivateRouteTable"},
+                "SubnetId" : { "Ref" : "PrivateSubnet1"}
+            }
+        },
+        "PrivateRouteTableAssociationAZ2" : {
+            "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties" : {
+                "RouteTableId" : { "Ref" : "PrivateRouteTable"},
+                "SubnetId" : { "Ref" : "PrivateSubnet2"}
+            }
+        },
+        "PublicNetworkAcl" : {
+            "Type" : "AWS::EC2::NetworkAcl",
+            "Properties" : {
+                "VpcId" : { "Ref" : "VPC"},
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "PublicAclHttpInboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "false",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "RuleNumber" : "100",
+                "PortRange" : { "From" : "80", "To" : "80" }
+            }
+        },
+        "PublicAclHttpsInboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "false",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "RuleNumber" : "110",
+                "PortRange" : { "From" : "443", "To" : "443" }
+            }
+        },
+        "PublicAclSshInboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "false",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "RuleNumber" : "120",
+                "PortRange" : { "From" : "22", "To" : "22" }
+            }
+        },
+        "PublicReturnTrafficInboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "false",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "RuleNumber" : "130",
+                "PortRange" : { "From" : "1024", "To" : "65535" }
+            }
+        },
+        "PublicAclHttpOutboudRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "true",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "RuleNumber" : "100",
+                "PortRange" : { "From" : "80", "To" : "80" }
+            }
+        },
+        "PublicAclHttpsOutboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "true",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "RuleNumber" : "110",
+                "PortRange" : { "From" : "443", "To" : "443" }
+            }
+        },
+        "PublicAclSshOutboundRuleSubnet1" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Public1", "CIDR"] },
+                "Egress" : "true",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "RuleNumber" : "120",
+                "PortRange" : { "From" : "22", "To" : "22" }
+            }
+        },
+        "PublicAclSshOutboundRuleSubnet2" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Public2", "CIDR"] },
+                "Egress" : "true",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "RuleNumber" : "130",
+                "PortRange" : { "From" : "22", "To" : "22" }
+            }
+        },
+        "PublicAclResponsesOutboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "true",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "RuleNumber" : "140",
+                "PortRange" : { "From" : "32768", "To" : "65535" }
+            }
+        },
+        "PublicSubnet1AclAssociation" : {
+            "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties" : {
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "SubnetId" : { "Ref" : "PublicSubnet1"}
+            }
+        },
+        "PublicSubnet2AclAssociation" : {
+            "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties" : {
+                "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+                "SubnetId" : { "Ref" : "PublicSubnet2"}
+            }
+        },
+        "PrivateNetworkAcl" : {
+            "Type" : "AWS::EC2::NetworkAcl",
+            "Properties" : {
+                "VpcId" : { "Ref" : "VPC"},
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "PrivateAclSshPublicSub1InboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Public1", "CIDR"] },
+                "Egress" : "false",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+                "RuleNumber" : "100",
+                "PortRange" : { "From" : "22", "To" : "22" }
+            }
+        },
+        "PrivateAclSshPublicSub2InboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Public2", "CIDR"] },
+                "Egress" : "false",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+                "RuleNumber" : "110",
+                "PortRange" : { "From" : "22", "To" : "22" }
+            }
+        },
+        "PrivateReturnTrafficInboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "false",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+                "RuleNumber" : "120",
+                "PortRange" : { "From" : "1024", "To" : "65535" }
+            }
+        },
+        "PrivateAclHttpOutboudRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "true",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+                "RuleNumber" : "130",
+                "PortRange" : { "From" : "80", "To" : "80" }
+            }
+        },
+        "PrivateAclHttpsOutboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : "0.0.0.0/0",
+                "Egress" : "true",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+                "RuleNumber" : "140",
+                "PortRange" : { "From" : "443", "To" : "443" }
+            }
+        },
+        "PrivateAclResponsesSub1OutboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Public1", "CIDR"] },
+                "Egress" : "true",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+                "RuleNumber" : "150",
+                "PortRange" : { "From" : "32768", "To" : "65535" }
+            }
+        },
+        "PrivateAclResponsesSub2OutboundRule" : {
+            "Type" : "AWS::EC2::NetworkAclEntry",
+            "Properties" : {
+                "CidrBlock" : { "Fn::FindInMap" : ["NetworkConfig", "Public2", "CIDR"] },
+                "Egress" : "true",
+                "RuleAction" : "allow",
+                "Protocol" : "6",
+                "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+                "RuleNumber" : "160",
+                "PortRange" : { "From" : "32768", "To" : "65535" }
+            }
+        },
+        "PrivateSubnet1AclAssociation" : {
+            "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties" : {
+                "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+                "SubnetId" : { "Ref" : "PrivateSubnet1"}
+            }
+        },
+        "PrivateSubnet2AclAssociation" : {
+            "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties" : {
+                "NetworkAclId" : { "Ref" : "PrivateNetworkAcl" },
+                "SubnetId" : { "Ref" : "PrivateSubnet2"}
+            }
+        },
+        "PublicNodeSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "Allow http and ssh to public nodes",
+                "VpcId" : {"Ref" : "VPC"},
+                "Tags" : [
+                    { "Key" : "Owner", "Value": "yamelnychuk" }
+                ]
+            }
+        },
+        "PublicNodeSGHttpIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 80,
+                "ToPort" : 80,
+                "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PublicNodeSGHttpsIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 443,
+                "ToPort" : 443,
+                "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PublicNodeSGKibanaIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 5601,
+                "ToPort" : 5601,
+                "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PublicNodeSGSshIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 22,
+                "ToPort" : 22,
+                "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PublicNodeSGHttpEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 80,
+                "ToPort" : 80,
+                "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PublicNodeSGHttpsEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 443,
+                "ToPort" : 443,
+                "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PublicNodeSGKibanaEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 5601,
+                "ToPort" : 5601,
+                "DestinationSecurityGroupId" : { "Ref" : "PrivateNodeSecurityGroup"}, 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PublicNodeSGElasticSearchEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 9200,
+                "ToPort" : 9200,
+                "DestinationSecurityGroupId" : { "Ref" : "PrivateNodeSecurityGroup"}, 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PublicNodeSGBeatsEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 5044,
+                "ToPort" : 5044,
+                "DestinationSecurityGroupId" : { "Ref" : "PrivateNodeSecurityGroup"}, 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PrivateNodeSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "Allow http and ssh to private nodes",
+                "VpcId" : {"Ref" : "VPC"},
+                "Tags" : [ { "Key" : "Owner", "Value": "yamelnychuk" }]
+            }
+        },
+        "PrivateNodeSGKibanaIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 5601,
+                "ToPort" : 5601,
+                "SourceSecurityGroupId" : { "Ref" : "PublicNodeSecurityGroup"},
+                "GroupId" : { "Ref" : "PrivateNodeSecurityGroup"}
+            }
+        },
+        "PrivateNodeSGElasticSearchIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 9200,
+                "ToPort" : 9200,
+                "SourceSecurityGroupId" : { "Ref" : "PublicNodeSecurityGroup"},
+                "GroupId" : { "Ref" : "PrivateNodeSecurityGroup"}
+            }
+        },
+        "PrivateNodeSGBeatsIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 5044,
+                "ToPort" : 5044,
+                "SourceSecurityGroupId" : { "Ref" : "PublicNodeSecurityGroup"},
+                "GroupId" : { "Ref" : "PrivateNodeSecurityGroup"}
+            }
+        },
+        "PrivateNodeSGSshIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 22,
+                "ToPort" : 22,
+                "SourceSecurityGroupId" : { "Ref" : "PublicNodeSecurityGroup"},
+                "GroupId" : { "Ref" : "PrivateNodeSecurityGroup"}
+            }
+        },
+        "PrivateNodeSGKibanaEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 5601,
+                "ToPort" : 5601,
+                "DestinationSecurityGroupId" : { "Ref" : "PublicNodeSecurityGroup"}, 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PrivateNodeSGHttpEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 80,
+                "ToPort" : 80,
+                "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PrivateNodeSGHttpsEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "tcp",
+                "FromPort" : 443,
+                "ToPort" : 443,
+                "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "LocalHostedZone" : {
+            "Type" : "AWS::Route53::HostedZone",
+            "Properties" : {
+                "HostedZoneConfig": {
+                    "Comment": ""
+                },
+                "Name": "elasticstack.com",
+                "VPCs": [
+                    { "VPCId": { "Ref" : "VPC"}, "VPCRegion": "eu-west-3"}
+                ]
+            }
+        }
+    },
+    "Outputs": {
+          "VPCId" : {
+            "Description" : "VPC ID",
+            "Value" :  { "Ref" : "VPC" },
+            "Export" : { "Name" : {"Fn::Sub": "${AWS::StackName}-VPCID" }}
+          },
+          "PublicSubnet1" : {
+            "Description" : "The subnet ID to use for public instances",
+            "Value" :  { "Ref" : "PublicSubnet1" },
+            "Export" : { "Name" : {"Fn::Sub": "${AWS::StackName}-PublicSubnet1ID" }}
+          },
+          "PublicSubnet2" : {
+            "Description" : "The subnet ID to use for public instances",
+            "Value" :  { "Ref" : "PublicSubnet2" },
+            "Export" : { "Name" : {"Fn::Sub": "${AWS::StackName}-PublicSubnet2ID" }}
+          },
+          "PrivateSubnet1" : {
+            "Description" : "The subnet ID to use for private instances",
+            "Value" :  { "Ref" : "PrivateSubnet1" },
+            "Export" : { "Name" : {"Fn::Sub": "${AWS::StackName}-PrivateSubnet1ID" }}
+          },
+          "PrivateSubnet2" : {
+            "Description" : "The subnet ID to use for private instances",
+            "Value" :  { "Ref" : "PublicSubnet1" },
+            "Export" : { "Name" : {"Fn::Sub": "${AWS::StackName}-PrivateSubnet2ID" }}
+          },
+          "PublicNodeSG" : {
+            "Description" : "The public security group",
+            "Value" :  { "Ref" : "PublicNodeSecurityGroup" },
+            "Export" : { "Name" : {"Fn::Sub": "${AWS::StackName}-PublicNodeSG" }}
+          },
+          "PrivateNodeSG" : {
+            "Description" : "The private security group",
+            "Value" :  { "Ref" : "PrivateNodeSecurityGroup" },
+            "Export" : { "Name" : {"Fn::Sub": "${AWS::StackName}-PrivateNodeSG" }}
+          },
+          "LocalHostedZone" : {
+            "Description" : "Private hosted zone ID",
+            "Value" :  { "Ref" : "LocalHostedZone" },
+            "Export" : { "Name" : {"Fn::Sub": "${AWS::StackName}-LocalHostedZoneID" }}
+          }
+    }
+}
