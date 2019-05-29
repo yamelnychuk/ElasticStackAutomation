@@ -480,6 +480,16 @@
                 ]
             }
         },
+        "PublicNodeSGIcmpIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "icmp",
+                "FromPort" : 8, 
+                "ToPort" : -1,
+                "CidrIp" : "0.0.0.0/0",
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
         "PublicNodeSGHttpIngressRule" : {
             "Type" : "AWS::EC2::SecurityGroupIngress",
             "Properties" : {
@@ -517,6 +527,16 @@
                 "FromPort" : 22,
                 "ToPort" : 22,
                 "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
+            }
+        },
+        "PublicNodeSGIcmpEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "icmp",
+                "FromPort" : 8, 
+                "ToPort" : -1,
+                "DestinationSecurityGroupId" : { "Ref" : "PrivateNodeSecurityGroup"},
                 "GroupId" : { "Ref" : "PublicNodeSecurityGroup"}
             }
         },
@@ -576,6 +596,16 @@
                 "GroupDescription" : "Allow http and ssh to private nodes",
                 "VpcId" : {"Ref" : "VPC"},
                 "Tags" : [ { "Key" : "Owner", "Value": "yamelnychuk" }]
+            }
+        },
+        "PrivateNodeSGIcmpIngressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupIngress",
+            "Properties" : {
+                "IpProtocol" : "icmp",
+                "FromPort" : 8, 
+                "ToPort" : -1,
+                "SourceSecurityGroupId" : { "Ref" : "PublicNodeSecurityGroup"},
+                "GroupId" : { "Ref" : "PrivateNodeSecurityGroup"}
             }
         },
         "PrivateNodeSGKibanaIngressRule" : {
@@ -645,6 +675,16 @@
                 "FromPort" : 443,
                 "ToPort" : 443,
                 "CidrIp" : "0.0.0.0/0", 
+                "GroupId" : { "Ref" : "PrivateNodeSecurityGroup"}
+            }
+        },
+        "PrivateNodeSGIcmpEgressRule" : {
+            "Type" : "AWS::EC2::SecurityGroupEgress",
+            "Properties" : {
+                "IpProtocol" : "icmp",
+                "FromPort" : 8, 
+                "ToPort" : -1,
+                "DestinationSecurityGroupId" : { "Ref" : "PublicNodeSecurityGroup"},
                 "GroupId" : { "Ref" : "PrivateNodeSecurityGroup"}
             }
         },
